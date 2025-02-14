@@ -5,15 +5,15 @@
 # compile Fortran with /opt/homebrew/bin/gfortran
 CXX_DEFINES = -DBOOST_DATE_TIME_DYN_LINK -DBOOST_DATE_TIME_NO_LIB -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB
 
-CXX_INCLUDES = -I/Users/shreeshjha/Dev/Github/flashTrading/backend -I/Users/shreeshjha/Dev/Github/flashTrading/backend/build/_deps/crow-src/include -isystem /opt/homebrew/include
+CXX_INCLUDES = -I/Users/shreeshjha/Dev/Github/flashTrading/backend -I/Users/shreeshjha/Dev/Github/flashTrading/backend/build/_deps/asio-src/asio/include -I/Users/shreeshjha/Dev/Github/flashTrading/backend/build/_deps/crow-src/include -isystem /opt/homebrew/include
 
-CXX_FLAGSarm64 = -std=gnu++11 -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.0.sdk
+CXX_FLAGSarm64 = -std=gnu++17 -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.0.sdk
 
-CXX_FLAGS = -std=gnu++11 -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.0.sdk
+CXX_FLAGS = -std=gnu++17 -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.0.sdk
 
 Fortran_DEFINES = -DBOOST_DATE_TIME_DYN_LINK -DBOOST_DATE_TIME_NO_LIB -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB
 
-Fortran_INCLUDES = -I/Users/shreeshjha/Dev/Github/flashTrading/backend -I/Users/shreeshjha/Dev/Github/flashTrading/backend/build/_deps/crow-src/include -I/opt/homebrew/include
+Fortran_INCLUDES = -I/Users/shreeshjha/Dev/Github/flashTrading/backend -I/Users/shreeshjha/Dev/Github/flashTrading/backend/build/_deps/asio-src/asio/include -I/Users/shreeshjha/Dev/Github/flashTrading/backend/build/_deps/crow-src/include -I/opt/homebrew/include
 
 Fortran_FLAGSarm64 =  -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.0.sdk
 

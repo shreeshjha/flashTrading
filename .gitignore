@@ -1,0 +1,45 @@
+# ---------------------------
+#  General OS/Editor Files
+# ---------------------------
+.DS_Store
+Thumbs.db
+
+# ---------------------------
+#  Node/React Frontend
+# ---------------------------
+node_modules/
+# Production build output (if your React build folder is named "build")
+build/
+dist/
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# Environment variables
+.env
+
+# ---------------------------
+#  CMake/C++/Fortran Backend
+# ---------------------------
+# Build artifacts
+build/
+backend/build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Object files, module files, and executables
+*.o
+*.mod
+*.exe
+*.out
+simulator
+
+# ---------------------------
+#  Optional: Visual Studio Code
+# ---------------------------
+.vscode/
+
+
+

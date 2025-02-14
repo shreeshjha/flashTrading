@@ -149,6 +149,7 @@ set(CMAKE_MAKEFILE_PRODUCTS
   "CMakeFiles/3.30.5/CMakeFortranCompiler.cmake"
   "CMakeFiles/3.30.5/CMakeCXXCompiler.cmake"
   "_deps/crow-subbuild/CMakeLists.txt"
+  "_deps/asio-subbuild/CMakeLists.txt"
   "CMakeFiles/CMakeDirectoryInformation.cmake"
   "_deps/crow-build/CrowConfig.cmake"
   "CPackConfig.cmake"

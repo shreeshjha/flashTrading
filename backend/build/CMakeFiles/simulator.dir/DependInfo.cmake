@@ -25,6 +25,7 @@ set(CMAKE_TARGET_DEFINITIONS_Fortran
 # The include file search paths:
 set(CMAKE_Fortran_TARGET_INCLUDE_PATH
   "/Users/shreeshjha/Dev/Github/flashTrading/backend"
+  "_deps/asio-src/asio/include"
   "_deps/crow-src/include"
   "/opt/homebrew/include"
   )
