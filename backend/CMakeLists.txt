@@ -5,12 +5,11 @@ project(flashTrading LANGUAGES Fortran CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find required packages
-find_package(Threads REQUIRED)  # Crow needs threading support
+find_package(Threads REQUIRED)
+find_package(Lua REQUIRED)
 
 include(FetchContent)
 
-# Download Crow if not present
 FetchContent_Declare(
     Crow
     GIT_REPOSITORY https://github.com/CrowCpp/Crow.git
@@ -18,7 +17,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Crow)
 
-# Download standalone Asio if not present
 FetchContent_Declare(
     asio
     GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
@@ -31,23 +29,41 @@ set(FORTRAN_SOURCES
     order_book.f90
 )
 
-# C++ sources
+# C++ sources for the main simulator executable
 set(CPP_SOURCES
     trading_engine.cpp
     server.cpp
 )
 
-# Create the executable
 add_executable(simulator ${FORTRAN_SOURCES} ${CPP_SOURCES})
 
-# Link libraries
 target_link_libraries(simulator PRIVATE
     Crow::Crow
     Threads::Threads
+    ${LUA_LIBRARIES}  # if Lua functions are needed in this binary
 )
 
-# Include directories
 target_include_directories(simulator PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${asio_SOURCE_DIR}/asio/include
+    ${LUA_INCLUDE_DIR}
+)
+
+# Create a separate executable for Lua backtesting.
+set(LUA_CPP_SOURCES
+    trading_engine.cpp   # reuse the trading engine
+    lua_integration.cpp  # this file has main() for Lua integration
+)
+
+add_executable(simulator_lua ${FORTRAN_SOURCES} ${LUA_CPP_SOURCES})
+
+target_link_libraries(simulator_lua PRIVATE
+    Threads::Threads
+    ${LUA_LIBRARIES}
+)
+
+target_include_directories(simulator_lua PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${asio_SOURCE_DIR}/asio/include
+    ${LUA_INCLUDE_DIR}
 )
