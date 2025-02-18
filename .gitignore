@@ -1,0 +1,37 @@
+# ---------------------------
+# General Files
+# ---------------------------
+.DS_Store
+Thumbs.db
+*.log
+
+# ---------------------------
+# Frontend (React/Node)
+# ---------------------------
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+frontend/.env
+frontend/.cache/
+
+# ---------------------------
+# Backend (CMake, C++, Fortran)
+# ---------------------------
+backend/build/
+backend/CMakeFiles/
+backend/CMakeCache.txt
+backend/cmake_install.cmake
+backend/Makefile
+
+# Object files, Fortran module files, and executables
+backend/*.o
+backend/*.mod
+backend/simulator
+backend/*.out
+
+# ---------------------------
+# IDE/Editor Specific (Optional)
+# ---------------------------
+.vscode/
+.idea/
+
