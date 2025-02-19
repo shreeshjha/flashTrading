@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Threads REQUIRED)
 find_package(Lua REQUIRED)
+# (Assume QuickFIX is installed; adjust as needed.)
 
 include(FetchContent)
 
@@ -24,12 +25,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(asio)
 
-# Fortran source
+# Fortran sources
 set(FORTRAN_SOURCES
     order_book.f90
 )
 
-# C++ sources for the main simulator executable
+# C++ sources for the main simulator executable (HTTP/WS server)
 set(CPP_SOURCES
     trading_engine.cpp
     server.cpp
@@ -51,8 +52,8 @@ target_include_directories(simulator PRIVATE
 
 # Create a separate executable for Lua backtesting.
 set(LUA_CPP_SOURCES
-    trading_engine.cpp   # reuse the trading engine
-    lua_integration.cpp  # this file has main() for Lua integration
+    trading_engine.cpp   # reuse the trading engine wrappers
+    lua_integration.cpp  # main() for Lua integration
 )
 
 add_executable(simulator_lua ${FORTRAN_SOURCES} ${LUA_CPP_SOURCES})
@@ -67,3 +68,25 @@ target_include_directories(simulator_lua PRIVATE
     ${asio_SOURCE_DIR}/asio/include
     ${LUA_INCLUDE_DIR}
 )
+
+# Create a separate executable for FIX integration.
+set(FIX_CPP_SOURCES
+    trading_engine.cpp  # reuse wrappers
+    fix_integration.cpp
+)
+
+add_executable(simulator_fix ${FORTRAN_SOURCES} ${FIX_CPP_SOURCES})
+
+target_include_directories(simulator_fix PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${asio_SOURCE_DIR}/asio/include
+    ${LUA_INCLUDE_DIR}
+    /usr/local/include   # Add QuickFIX include directory (adjust if different)
+)
+
+target_link_libraries(simulator_fix PRIVATE
+    Threads::Threads
+    ${LUA_LIBRARIES}
+    /usr/local/lib/libquickfix.dylib   # Link against QuickFIX (adjust path/name if needed)
+)
+

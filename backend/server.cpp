@@ -1,5 +1,5 @@
 #include "crow.h"
-#include "trading_engine.h"  // Include the declarations from trading_engine.h
+#include "trading_engine.h"
 #include <cstdlib>
 #include <string>
 #include <sstream>
@@ -37,7 +37,7 @@ int main() {
 
     crow::App<CORSMiddleware> app;
 
-    // Get order count endpoint.
+    // HTTP endpoint: Get order count.
     CROW_ROUTE(app, "/order_count")
     .methods(crow::HTTPMethod::Get, crow::HTTPMethod::Options)
     ([](const crow::request& req) {
@@ -49,7 +49,7 @@ int main() {
         return crow::response(result);
     });
 
-    // Add order endpoint.
+    // HTTP endpoint: Add order.
     CROW_ROUTE(app, "/add_order")
     .methods(crow::HTTPMethod::Post, crow::HTTPMethod::Options)
     ([](const crow::request& req) {
@@ -77,7 +77,7 @@ int main() {
         }
     });
 
-    // Cancel order endpoint.
+    // HTTP endpoint: Cancel order.
     CROW_ROUTE(app, "/cancel_order")
     .methods(crow::HTTPMethod::Post, crow::HTTPMethod::Options)
     ([](const crow::request& req) {
@@ -101,7 +101,7 @@ int main() {
         }
     });
 
-    // Modify order endpoint.
+    // HTTP endpoint: Modify order.
     CROW_ROUTE(app, "/modify_order")
     .methods(crow::HTTPMethod::Post, crow::HTTPMethod::Options)
     ([](const crow::request& req) {
@@ -127,6 +127,31 @@ int main() {
         }
     });
 
+    // WebSocket endpoint for real-time updates.
+   CROW_ROUTE(app, "/ws")
+.websocket()
+.onopen([](crow::websocket::connection& conn) {
+    conn.send_text("Connected to WebSocket");
+    std::thread([&conn]() {
+        while (true) {
+            int count = cpp_get_order_count();
+            try {
+                conn.send_text("Live Order Count: " + std::to_string(count));
+            } catch (...) {
+                break; // Exit thread if sending fails.
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }).detach();
+})
+.onmessage([](crow::websocket::connection& conn, const std::string& data, bool is_binary) {
+    conn.send_text("Echo: " + data);
+})
+.onclose([](crow::websocket::connection& conn, const std::string& reason) {
+    // Handle connection close if needed.
+});
+ 
     app.port(18080).multithreaded().run();
     return 0;
 }
+

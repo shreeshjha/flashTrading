@@ -9,6 +9,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastOrder, setLastOrder] = useState(null);
+  const [wsMessage, setWsMessage] = useState('');
 
   const fetchOrderCount = async () => {
     try {
@@ -27,6 +28,24 @@ function App() {
     fetchOrderCount();
     const interval = setInterval(fetchOrderCount, 5000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Create a WebSocket connection for real-time updates.
+    const ws = new WebSocket('ws://localhost:18080/ws');
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+    };
+    ws.onmessage = (event) => {
+      setWsMessage(event.data);
+    };
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+    ws.onclose = () => {
+      console.log('WebSocket closed');
+    };
+    return () => ws.close();
   }, []);
 
   const addOrder = async () => {
@@ -94,6 +113,9 @@ function App() {
       <h1>Trading Simulator Dashboard</h1>
       <p style={{ fontSize: "1.2rem" }}>
         Current Order Count: <strong>{orderCount}</strong>
+      </p>
+      <p style={{ fontSize: "1rem", color: "#007700" }}>
+        WebSocket Update: {wsMessage}
       </p>
       <button onClick={addOrder} disabled={loading} style={{
           padding: '12px 24px',
