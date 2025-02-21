@@ -1,14 +1,21 @@
 #include "lua.hpp"
 #include <iostream>
-#include "trading_engine.h"  // Use cpp_add_order from the trading engine
+#include <string>
+#include "trading_engine.h"
 
 int lua_add_order(lua_State* L) {
+    if (lua_gettop(L) < 5) {
+        lua_pushstring(L, "Not enough arguments to add_order");
+        lua_error(L);
+        return 0;
+    }
     int id = lua_tointeger(L, 1);
-    double price = lua_tonumber(L, 2);
-    int quantity = lua_tointeger(L, 3);
-    const char* side_str = lua_tostring(L, 4);
+    const char* symbol = lua_tostring(L, 2);
+    double price = lua_tonumber(L, 3);
+    int quantity = lua_tointeger(L, 4);
+    const char* side_str = lua_tostring(L, 5);
     char side = side_str[0];
-    cpp_add_order(id, price, quantity, side);
+    cpp_add_order(id, std::string(symbol), price, quantity, side);
     return 0;
 }
 

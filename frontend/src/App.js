@@ -1,172 +1,221 @@
 import React, { useState, useEffect } from 'react';
 
 function App() {
+  const [symbol, setSymbol] = useState("AAPL");
   const [orderCount, setOrderCount] = useState(0);
-  const [cancelId, setCancelId] = useState('');
-  const [modifyId, setModifyId] = useState('');
-  const [newPrice, setNewPrice] = useState('');
-  const [newQuantity, setNewQuantity] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [lastOrder, setLastOrder] = useState(null);
-  const [wsMessage, setWsMessage] = useState('');
+  const [orderBook, setOrderBook] = useState([]);
+  const [trades, setTrades] = useState([]);
+  const [wsMessage, setWsMessage] = useState("");
 
-  const fetchOrderCount = async () => {
+  // For add/cancel/modify forms
+  const [addOrder, setAddOrder] = useState({ id: "", price: "", quantity: "", side: "B" });
+  const [cancelOrder, setCancelOrder] = useState({ id: "" });
+  const [modifyOrder, setModifyOrder] = useState({ id: "", new_price: "", new_quantity: "" });
+
+  // Fetch order count
+  const fetchOrderCount = async (sym) => {
     try {
-      const response = await fetch('http://localhost:18080/order_count');
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
+      const res = await fetch(`http://localhost:18080/order_count?symbol=${sym}`);
+      const data = await res.json();
       setOrderCount(data.order_count);
-      setError(null);
     } catch (err) {
-      console.error('Error fetching order count:', err);
-      setError('Failed to fetch order count');
+      console.error("Error fetching order count:", err);
     }
   };
 
-  useEffect(() => {
-    fetchOrderCount();
-    const interval = setInterval(fetchOrderCount, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  // Fetch order book
+  const fetchOrderBook = async (sym) => {
+    try {
+      const res = await fetch(`http://localhost:18080/order_book?symbol=${sym}`);
+      const data = await res.json();
+      setOrderBook(data.orders || []);
+    } catch (err) {
+      console.error("Error fetching order book:", err);
+    }
+  };
 
+  // Fetch trades
+  const fetchTrades = async (sym) => {
+    try {
+      const res = await fetch(`http://localhost:18080/trades?symbol=${sym}`);
+      const data = await res.json();
+      setTrades(data.trades || []);
+    } catch (err) {
+      console.error("Error fetching trades:", err);
+    }
+  };
+
+  // On symbol change, refetch data
   useEffect(() => {
-    // Create a WebSocket connection for real-time updates.
-    const ws = new WebSocket('ws://localhost:18080/ws');
+    fetchOrderCount(symbol);
+    fetchOrderBook(symbol);
+    fetchTrades(symbol);
+  }, [symbol]);
+
+  // Poll for data every few seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchOrderCount(symbol);
+      fetchOrderBook(symbol);
+      fetchTrades(symbol);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [symbol]);
+
+  // WebSocket for live updates
+  useEffect(() => {
+    const ws = new WebSocket("ws://localhost:18080/ws");
     ws.onopen = () => {
-      console.log('WebSocket connected');
+      // send initial symbol
+      ws.send(symbol);
+      console.log("WebSocket connected");
     };
-    ws.onmessage = (event) => {
-      setWsMessage(event.data);
+    ws.onmessage = (e) => {
+      setWsMessage(e.data);
     };
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+    ws.onerror = (e) => {
+      console.error("WebSocket error:", e);
     };
     ws.onclose = () => {
-      console.log('WebSocket closed');
+      console.log("WebSocket closed");
     };
     return () => ws.close();
-  }, []);
+  }, [symbol]);
 
-  const addOrder = async () => {
-    setLoading(true);
-    setError(null);
-    const newOrder = {
-      id: Math.floor(Math.random() * 10000),
-      price: parseFloat((Math.random() * 100 + 50).toFixed(2)),
-      quantity: Math.floor(Math.random() * 100 + 1),
-      side: Math.random() < 0.5 ? 'B' : 'S'
+  // Add order
+  const handleAddOrder = async () => {
+    const payload = {
+      symbol,
+      id: parseInt(addOrder.id),
+      price: parseFloat(addOrder.price),
+      quantity: parseInt(addOrder.quantity),
+      side: addOrder.side
     };
     try {
-      const response = await fetch('http://localhost:18080/add_order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newOrder)
+      await fetch("http://localhost:18080/add_order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
-      if (!response.ok) throw new Error(`Failed to add order: ${response.status}`);
-      setLastOrder(newOrder);
-      await fetchOrderCount();
     } catch (err) {
-      console.error('Error adding order:', err);
-      setError('Failed to add order');
-    } finally {
-      setLoading(false);
+      console.error("Add order failed:", err);
     }
   };
 
-  const cancelOrder = async () => {
+  // Cancel order
+  const handleCancelOrder = async () => {
+    const payload = {
+      symbol,
+      id: parseInt(cancelOrder.id)
+    };
     try {
-      const response = await fetch('http://localhost:18080/cancel_order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: parseInt(cancelId, 10) })
+      await fetch("http://localhost:18080/cancel_order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
-      const data = await response.json();
-      alert(data.message);
-      await fetchOrderCount();
     } catch (err) {
-      console.error('Error cancelling order:', err);
+      console.error("Cancel order failed:", err);
     }
   };
 
-  const modifyOrder = async () => {
+  // Modify order
+  const handleModifyOrder = async () => {
+    const payload = {
+      symbol,
+      id: parseInt(modifyOrder.id),
+      new_price: parseFloat(modifyOrder.new_price),
+      new_quantity: parseInt(modifyOrder.new_quantity)
+    };
     try {
-      const response = await fetch('http://localhost:18080/modify_order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: parseInt(modifyId, 10),
-          new_price: parseFloat(newPrice),
-          new_quantity: parseInt(newQuantity, 10)
-        })
+      await fetch("http://localhost:18080/modify_order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
-      const data = await response.json();
-      alert(data.message);
-      await fetchOrderCount();
     } catch (err) {
-      console.error('Error modifying order:', err);
+      console.error("Modify order failed:", err);
     }
   };
 
   return (
-    <div style={{ padding: "2rem", maxWidth: "800px", margin: "0 auto" }}>
+    <div style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto", fontFamily: "Arial, sans-serif" }}>
       <h1>Trading Simulator Dashboard</h1>
-      <p style={{ fontSize: "1.2rem" }}>
-        Current Order Count: <strong>{orderCount}</strong>
-      </p>
-      <p style={{ fontSize: "1rem", color: "#007700" }}>
-        WebSocket Update: {wsMessage}
-      </p>
-      <button onClick={addOrder} disabled={loading} style={{
-          padding: '12px 24px',
-          fontSize: '16px',
-          cursor: loading ? 'not-allowed' : 'pointer',
-          backgroundColor: loading ? '#cccccc' : '#4CAF50',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          marginBottom: '16px',
-          transition: 'background-color 0.3s'
-        }}>
-        {loading ? 'Adding Order...' : 'Add Random Order'}
-      </button>
+
+      <label>Select Symbol: </label>
+      <select value={symbol} onChange={e => setSymbol(e.target.value)}>
+        <option value="AAPL">AAPL</option>
+        <option value="MSFT">MSFT</option>
+        {/* Add more symbols if desired */}
+      </select>
+
+      <p style={{ marginTop: "1rem" }}>Current Order Count: <strong>{orderCount}</strong></p>
+      <p style={{ color: "#007700" }}>WebSocket Update: {wsMessage}</p>
+
       <hr />
-      <div>
-        <h3>Cancel Order</h3>
-        <input type="number" placeholder="Order ID" value={cancelId} onChange={e => setCancelId(e.target.value)} />
-        <button onClick={cancelOrder}>Cancel Order</button>
-      </div>
-      <div>
-        <h3>Modify Order</h3>
-        <input type="number" placeholder="Order ID" value={modifyId} onChange={e => setModifyId(e.target.value)} />
-        <input type="number" placeholder="New Price" value={newPrice} onChange={e => setNewPrice(e.target.value)} />
-        <input type="number" placeholder="New Quantity" value={newQuantity} onChange={e => setNewQuantity(e.target.value)} />
-        <button onClick={modifyOrder}>Modify Order</button>
-      </div>
-      {error && (
-        <p style={{
-          color: 'red',
-          padding: '10px',
-          backgroundColor: '#ffebee',
-          borderRadius: '4px',
-          marginTop: '10px'
-        }}>
-          {error}
-        </p>
-      )}
-      {lastOrder && (
-        <div style={{ marginTop: '20px' }}>
-          <h3>Last Added Order Details:</h3>
-          <pre style={{
-            backgroundColor: '#f5f5f5',
-            padding: '15px',
-            borderRadius: '4px',
-            overflow: 'auto'
-          }}>
-            {JSON.stringify(lastOrder, null, 2)}
-          </pre>
-        </div>
-      )}
+      <h3>Add Order</h3>
+      <input type="number" placeholder="Order ID"
+        value={addOrder.id} onChange={e => setAddOrder({...addOrder, id: e.target.value})} />
+      <input type="number" placeholder="Price"
+        value={addOrder.price} onChange={e => setAddOrder({...addOrder, price: e.target.value})} />
+      <input type="number" placeholder="Quantity"
+        value={addOrder.quantity} onChange={e => setAddOrder({...addOrder, quantity: e.target.value})} />
+      <select value={addOrder.side} onChange={e => setAddOrder({...addOrder, side: e.target.value})}>
+        <option value="B">Buy</option>
+        <option value="S">Sell</option>
+      </select>
+      <button onClick={handleAddOrder}>Add Order</button>
+
+      <hr />
+      <h3>Cancel Order</h3>
+      <input type="number" placeholder="Order ID"
+        value={cancelOrder.id} onChange={e => setCancelOrder({...cancelOrder, id: e.target.value})} />
+      <button onClick={handleCancelOrder}>Cancel Order</button>
+
+      <hr />
+      <h3>Modify Order</h3>
+      <input type="number" placeholder="Order ID"
+        value={modifyOrder.id} onChange={e => setModifyOrder({...modifyOrder, id: e.target.value})} />
+      <input type="number" placeholder="New Price"
+        value={modifyOrder.new_price} onChange={e => setModifyOrder({...modifyOrder, new_price: e.target.value})} />
+      <input type="number" placeholder="New Quantity"
+        value={modifyOrder.new_quantity} onChange={e => setModifyOrder({...modifyOrder, new_quantity: e.target.value})} />
+      <button onClick={handleModifyOrder}>Modify Order</button>
+
+      <hr />
+      <h2>Order Book for {symbol}</h2>
+      <table border="1" cellPadding="5">
+        <thead>
+          <tr><th>Price</th><th>Quantity</th><th>Side</th></tr>
+        </thead>
+        <tbody>
+          {orderBook.map((o, idx) => (
+            <tr key={idx}>
+              <td>{o.price}</td>
+              <td>{o.quantity}</td>
+              <td>{o.side}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <hr />
+      <h2>Recent Trades for {symbol}</h2>
+      <table border="1" cellPadding="5">
+        <thead>
+          <tr><th>Trade ID</th><th>Price</th><th>Quantity</th><th>Side</th></tr>
+        </thead>
+        <tbody>
+          {trades.map((t, idx) => (
+            <tr key={idx}>
+              <td>{t.trade_id}</td>
+              <td>{t.price}</td>
+              <td>{t.quantity}</td>
+              <td>{t.side}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

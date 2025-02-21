@@ -27,10 +27,8 @@ public:
 
     void fromAdmin(const FIX::Message&, const FIX::SessionID&) override {}
 
-    // Removed throw clause.
     void toApp(FIX::Message&, const FIX::SessionID&) override {}
 
-    // Removed throw clause.
     void fromApp(const FIX::Message& message, const FIX::SessionID& sessionID) override {
         crack(message, sessionID);
     }
@@ -38,20 +36,25 @@ public:
     // Process NewOrderSingle FIX messages.
     void onMessage(const FIX44::NewOrderSingle& message, const FIX::SessionID& sessionID) override {
         FIX::ClOrdID clOrdID;
+        FIX::Symbol symbol;
         FIX::Side side;
         FIX::Price price;
         FIX::OrderQty qty;
         message.get(clOrdID);
+        message.get(symbol);
         message.get(side);
         message.get(price);
         message.get(qty);
 
         // Convert FIX side to our order side: 'B' for Buy, 'S' for Sell.
         char sideChar = (side == FIX::Side_BUY) ? 'B' : 'S';
-        // Convert ClOrdID (string) to int for simplicity.
+        // Convert ClOrdID (string) to int for order id.
         int id = std::atoi(clOrdID.getValue().c_str());
-        cpp_add_order(id, price, qty, sideChar);
-        std::cout << "Processed FIX NewOrderSingle: " << id << std::endl;
+        // Use the extracted symbol.
+        std::string symStr = symbol.getValue();
+        // Call our C++ wrapper with all five arguments.
+        cpp_add_order(id, symStr, price, qty, sideChar);
+        std::cout << "Processed FIX NewOrderSingle for symbol " << symStr << ": order id " << id << std::endl;
     }
 };
 
