@@ -1,18 +1,22 @@
+// App.js
 import React, { useState, useEffect } from 'react';
+import { Line } from 'react-chartjs-2';
+import 'chart.js/auto';
+import 'bootstrap/dist/css/bootstrap.min.css';
 
 function App() {
   const [symbol, setSymbol] = useState("AAPL");
   const [orderCount, setOrderCount] = useState(0);
   const [orderBook, setOrderBook] = useState([]);
   const [trades, setTrades] = useState([]);
+  const [riskMetrics, setRiskMetrics] = useState(0);
   const [wsMessage, setWsMessage] = useState("");
 
-  // For add/cancel/modify forms
-  const [addOrder, setAddOrder] = useState({ id: "", price: "", quantity: "", side: "B" });
+  const [addOrder, setAddOrder] = useState({ id: "", price: "", quantity: "", side: "B", order_type: "0" });
   const [cancelOrder, setCancelOrder] = useState({ id: "" });
   const [modifyOrder, setModifyOrder] = useState({ id: "", new_price: "", new_quantity: "" });
 
-  // Fetch order count
+  // Fetch functions
   const fetchOrderCount = async (sym) => {
     try {
       const res = await fetch(`http://localhost:18080/order_count?symbol=${sym}`);
@@ -23,7 +27,6 @@ function App() {
     }
   };
 
-  // Fetch order book
   const fetchOrderBook = async (sym) => {
     try {
       const res = await fetch(`http://localhost:18080/order_book?symbol=${sym}`);
@@ -34,7 +37,6 @@ function App() {
     }
   };
 
-  // Fetch trades
   const fetchTrades = async (sym) => {
     try {
       const res = await fetch(`http://localhost:18080/trades?symbol=${sym}`);
@@ -45,28 +47,38 @@ function App() {
     }
   };
 
-  // On symbol change, refetch data
+  const fetchRiskMetrics = async (sym) => {
+    try {
+      const res = await fetch(`http://localhost:18080/risk_metrics?symbol=${sym}`);
+      const data = await res.json();
+      setRiskMetrics(data.total_quantity);
+    } catch (err) {
+      console.error("Error fetching risk metrics:", err);
+    }
+  };
+
+  // Initial & interval data fetch
   useEffect(() => {
     fetchOrderCount(symbol);
     fetchOrderBook(symbol);
     fetchTrades(symbol);
+    fetchRiskMetrics(symbol);
   }, [symbol]);
 
-  // Poll for data every few seconds
   useEffect(() => {
     const interval = setInterval(() => {
       fetchOrderCount(symbol);
       fetchOrderBook(symbol);
       fetchTrades(symbol);
+      fetchRiskMetrics(symbol);
     }, 5000);
     return () => clearInterval(interval);
   }, [symbol]);
 
-  // WebSocket for live updates
+  // WebSocket
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:18080/ws");
     ws.onopen = () => {
-      // send initial symbol
       ws.send(symbol);
       console.log("WebSocket connected");
     };
@@ -82,14 +94,15 @@ function App() {
     return () => ws.close();
   }, [symbol]);
 
-  // Add order
+  // Handlers
   const handleAddOrder = async () => {
     const payload = {
       symbol,
       id: parseInt(addOrder.id),
       price: parseFloat(addOrder.price),
       quantity: parseInt(addOrder.quantity),
-      side: addOrder.side
+      side: addOrder.side,
+      order_type: parseInt(addOrder.order_type)
     };
     try {
       await fetch("http://localhost:18080/add_order", {
@@ -102,7 +115,6 @@ function App() {
     }
   };
 
-  // Cancel order
   const handleCancelOrder = async () => {
     const payload = {
       symbol,
@@ -119,7 +131,6 @@ function App() {
     }
   };
 
-  // Modify order
   const handleModifyOrder = async () => {
     const payload = {
       symbol,
@@ -138,85 +149,250 @@ function App() {
     }
   };
 
+  // Chart data
+  const orderBookData = {
+    labels: orderBook.map((_, idx) => idx + 1),
+    datasets: [
+      {
+        label: "Price",
+        data: orderBook.map(o => o.price),
+        borderColor: "blue",
+        fill: false,
+        tension: 0.1
+      }
+    ]
+  };
+
   return (
-    <div style={{ padding: "2rem", maxWidth: "900px", margin: "0 auto", fontFamily: "Arial, sans-serif" }}>
-      <h1>Trading Simulator Dashboard</h1>
+    <>
+      {/* Navbar */}
+      <nav className="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div className="container-fluid">
+          <a className="navbar-brand" href="#home">Trading Simulator</a>
+        </div>
+      </nav>
 
-      <label>Select Symbol: </label>
-      <select value={symbol} onChange={e => setSymbol(e.target.value)}>
-        <option value="AAPL">AAPL</option>
-        <option value="MSFT">MSFT</option>
-        {/* Add more symbols if desired */}
-      </select>
+      {/* Main container */}
+      <div className="container">
 
-      <p style={{ marginTop: "1rem" }}>Current Order Count: <strong>{orderCount}</strong></p>
-      <p style={{ color: "#007700" }}>WebSocket Update: {wsMessage}</p>
+        {/* Symbol Selection & Stats */}
+        <div className="row mb-4">
+          <div className="col-md-4">
+            <label className="form-label fw-bold">Select Symbol:</label>
+            <select
+              className="form-select"
+              value={symbol}
+              onChange={e => setSymbol(e.target.value)}
+            >
+              <option value="AAPL">AAPL</option>
+              <option value="MSFT">MSFT</option>
+            </select>
+          </div>
+          <div className="col-md-8">
+            <p className="mb-1 mt-4">
+              <strong>Current Order Count:</strong> {orderCount}
+            </p>
+            <p className="mb-1">
+              <strong>Risk Metric (Total Quantity):</strong> {riskMetrics}
+            </p>
+            <p className="mb-1 text-success">
+              <strong>WebSocket Update:</strong> {wsMessage}
+            </p>
+          </div>
+        </div>
 
-      <hr />
-      <h3>Add Order</h3>
-      <input type="number" placeholder="Order ID"
-        value={addOrder.id} onChange={e => setAddOrder({...addOrder, id: e.target.value})} />
-      <input type="number" placeholder="Price"
-        value={addOrder.price} onChange={e => setAddOrder({...addOrder, price: e.target.value})} />
-      <input type="number" placeholder="Quantity"
-        value={addOrder.quantity} onChange={e => setAddOrder({...addOrder, quantity: e.target.value})} />
-      <select value={addOrder.side} onChange={e => setAddOrder({...addOrder, side: e.target.value})}>
-        <option value="B">Buy</option>
-        <option value="S">Sell</option>
-      </select>
-      <button onClick={handleAddOrder}>Add Order</button>
+        {/* Orders Section */}
+        <div className="row">
+          {/* Add Order */}
+          <div className="col-md-4 mb-4">
+            <div className="card">
+              <div className="card-header">Add Order</div>
+              <div className="card-body">
+                <div className="mb-3">
+                  <label className="form-label">Order ID</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="Order ID"
+                    value={addOrder.id}
+                    onChange={e => setAddOrder({...addOrder, id: e.target.value})}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Price</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="Price"
+                    value={addOrder.price}
+                    onChange={e => setAddOrder({...addOrder, price: e.target.value})}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Quantity</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="Quantity"
+                    value={addOrder.quantity}
+                    onChange={e => setAddOrder({...addOrder, quantity: e.target.value})}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Side</label>
+                  <select
+                    className="form-select"
+                    value={addOrder.side}
+                    onChange={e => setAddOrder({...addOrder, side: e.target.value})}
+                  >
+                    <option value="B">Buy</option>
+                    <option value="S">Sell</option>
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Order Type</label>
+                  <select
+                    className="form-select"
+                    value={addOrder.order_type}
+                    onChange={e => setAddOrder({...addOrder, order_type: e.target.value})}
+                  >
+                    <option value="0">Limit</option>
+                    <option value="1">Market</option>
+                  </select>
+                </div>
+                <button className="btn btn-primary w-100" onClick={handleAddOrder}>
+                  Add Order
+                </button>
+              </div>
+            </div>
+          </div>
 
-      <hr />
-      <h3>Cancel Order</h3>
-      <input type="number" placeholder="Order ID"
-        value={cancelOrder.id} onChange={e => setCancelOrder({...cancelOrder, id: e.target.value})} />
-      <button onClick={handleCancelOrder}>Cancel Order</button>
+          {/* Cancel Order */}
+          <div className="col-md-4 mb-4">
+            <div className="card">
+              <div className="card-header">Cancel Order</div>
+              <div className="card-body">
+                <div className="mb-3">
+                  <label className="form-label">Order ID</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="Order ID"
+                    value={cancelOrder.id}
+                    onChange={e => setCancelOrder({...cancelOrder, id: e.target.value})}
+                  />
+                </div>
+                <button className="btn btn-warning w-100" onClick={handleCancelOrder}>
+                  Cancel Order
+                </button>
+              </div>
+            </div>
+          </div>
 
-      <hr />
-      <h3>Modify Order</h3>
-      <input type="number" placeholder="Order ID"
-        value={modifyOrder.id} onChange={e => setModifyOrder({...modifyOrder, id: e.target.value})} />
-      <input type="number" placeholder="New Price"
-        value={modifyOrder.new_price} onChange={e => setModifyOrder({...modifyOrder, new_price: e.target.value})} />
-      <input type="number" placeholder="New Quantity"
-        value={modifyOrder.new_quantity} onChange={e => setModifyOrder({...modifyOrder, new_quantity: e.target.value})} />
-      <button onClick={handleModifyOrder}>Modify Order</button>
+          {/* Modify Order */}
+          <div className="col-md-4 mb-4">
+            <div className="card">
+              <div className="card-header">Modify Order</div>
+              <div className="card-body">
+                <div className="mb-3">
+                  <label className="form-label">Order ID</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="Order ID"
+                    value={modifyOrder.id}
+                    onChange={e => setModifyOrder({...modifyOrder, id: e.target.value})}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">New Price</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="New Price"
+                    value={modifyOrder.new_price}
+                    onChange={e => setModifyOrder({...modifyOrder, new_price: e.target.value})}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">New Quantity</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="New Quantity"
+                    value={modifyOrder.new_quantity}
+                    onChange={e => setModifyOrder({...modifyOrder, new_quantity: e.target.value})}
+                  />
+                </div>
+                <button className="btn btn-info w-100" onClick={handleModifyOrder}>
+                  Modify Order
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
 
-      <hr />
-      <h2>Order Book for {symbol}</h2>
-      <table border="1" cellPadding="5">
-        <thead>
-          <tr><th>Price</th><th>Quantity</th><th>Side</th></tr>
-        </thead>
-        <tbody>
-          {orderBook.map((o, idx) => (
-            <tr key={idx}>
-              <td>{o.price}</td>
-              <td>{o.quantity}</td>
-              <td>{o.side}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        {/* Order Book & Chart */}
+        <div className="row mb-5">
+          <div className="col-md-12">
+            <h4 className="mb-3">Order Book for {symbol}</h4>
+            <div className="table-responsive">
+              <table className="table table-bordered table-striped">
+                <thead className="table-light">
+                  <tr>
+                    <th>Price</th>
+                    <th>Quantity</th>
+                    <th>Side</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderBook.map((o, idx) => (
+                    <tr key={idx}>
+                      <td>{o.price}</td>
+                      <td>{o.quantity}</td>
+                      <td>{o.side}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ height: "400px" }}>
+              <Line data={orderBookData} />
+            </div>
+          </div>
+        </div>
 
-      <hr />
-      <h2>Recent Trades for {symbol}</h2>
-      <table border="1" cellPadding="5">
-        <thead>
-          <tr><th>Trade ID</th><th>Price</th><th>Quantity</th><th>Side</th></tr>
-        </thead>
-        <tbody>
-          {trades.map((t, idx) => (
-            <tr key={idx}>
-              <td>{t.trade_id}</td>
-              <td>{t.price}</td>
-              <td>{t.quantity}</td>
-              <td>{t.side}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        {/* Trades */}
+        <div className="row mb-5">
+          <div className="col-md-12">
+            <h4 className="mb-3">Recent Trades for {symbol}</h4>
+            <div className="table-responsive">
+              <table className="table table-bordered table-striped">
+                <thead className="table-light">
+                  <tr>
+                    <th>Trade ID</th>
+                    <th>Price</th>
+                    <th>Quantity</th>
+                    <th>Side</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trades.map((t, idx) => (
+                    <tr key={idx}>
+                      <td>{t.trade_id}</td>
+                      <td>{t.price}</td>
+                      <td>{t.quantity}</td>
+                      <td>{t.side}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </>
   );
 }
 

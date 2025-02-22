@@ -2,9 +2,12 @@ module advanced_order_book
   use iso_c_binding
   implicit none
 
-  integer, parameter :: max_instruments = 10   ! only 2 instruments allowed
-  integer, parameter :: max_orders      = 100
-  integer, parameter :: max_trades      = 1000
+  integer, parameter :: max_instruments = 20
+  integer, parameter :: max_orders      = 200
+  integer, parameter :: max_trades      = 2000
+
+  ! Order types: 0 = Limit, 1 = Market, 2 = Stop
+  integer, parameter :: ORDER_LIMIT = 0, ORDER_MARKET = 1, ORDER_STOP = 2
 
   type, bind(C) :: trade
       integer(c_int) :: trade_id
@@ -21,6 +24,7 @@ module advanced_order_book
       integer(c_int) :: quantity
       character(kind=c_char) :: side
       integer(c_int) :: timestamp
+      integer(c_int) :: order_type  ! New field for order type
   end type order
 
   type, bind(C) :: instrument_book
@@ -55,48 +59,33 @@ contains
     integer :: i
     character(len=8) :: sym_fortran, temp_str
 
-    ! Initialize incoming symbol properly
     sym_fortran = ''
     do i = 1, 8
         if (symbol(i) == c_null_char) exit
         sym_fortran(i:i) = symbol(i)
     end do
-    
-    ! Trim both leading and trailing spaces
     sym_fortran = trim(adjustl(sym_fortran))
-
-    ! Debug output
     print *, "DEBUG: looking for symbol [", trim(sym_fortran), "]"
-
     if (len_trim(sym_fortran) == 0) then
         print *, "Error: empty symbol"
         idx = -1
         return
     end if
-
-    ! Search existing instruments
     do i = 1, instrument_count
         temp_str = cchar_to_string(books(i)%symbol)
         temp_str = trim(adjustl(temp_str))
-        
-        ! Debug comparison
         print *, "DEBUG: comparing with [", trim(temp_str), "]"
-        
         if (trim(temp_str) == trim(sym_fortran)) then
             idx = i
             print *, "DEBUG: found match at index", i
             return
         end if
     end do
-
-    ! If not found and space available, create new instrument
     if (instrument_count < max_instruments) then
         instrument_count = instrument_count + 1
-        ! Store trimmed symbol
         do i = 1, len_trim(sym_fortran)
             books(instrument_count)%symbol(i:i) = sym_fortran(i:i)
         end do
-        ! Pad with spaces
         do i = len_trim(sym_fortran) + 1, 8
             books(instrument_count)%symbol(i:i) = ' '
         end do
@@ -138,35 +127,59 @@ contains
       character(len=8) :: o_str, temp_str
 
       o_str = cchar_to_string(o%symbol)
-
       do
           if (o%quantity <= 0) exit
           match_idx = -1
-          match_price = 1.0d15
-
-          if (o%side == 'B') then
-              do i = 1, books(idx)%order_count
-                  temp_str = cchar_to_string(books(idx)%orders(i)%symbol)
-                  if (books(idx)%orders(i)%side == 'S' .and. trim(temp_str) == trim(o_str)) then
-                      if (books(idx)%orders(i)%price <= match_price) then
-                          match_price = books(idx)%orders(i)%price
-                          match_idx = i
+          if (o%order_type == ORDER_MARKET) then
+              if (o%side == 'B') then
+                  match_price = 1.0d15
+                  do i = 1, books(idx)%order_count
+                      temp_str = cchar_to_string(books(idx)%orders(i)%symbol)
+                      if (books(idx)%orders(i)%side == 'S' .and. trim(temp_str) == trim(o_str)) then
+                          if (books(idx)%orders(i)%price < match_price) then
+                              match_price = books(idx)%orders(i)%price
+                              match_idx = i
+                          end if
                       end if
-                  end if
-              end do
-              if (match_price > o%price) match_idx = -1
+                  end do
+              else
+                  match_price = -1.0d0
+                  do i = 1, books(idx)%order_count
+                      temp_str = cchar_to_string(books(idx)%orders(i)%symbol)
+                      if (books(idx)%orders(i)%side == 'B' .and. trim(temp_str) == trim(o_str)) then
+                          if (books(idx)%orders(i)%price > match_price) then
+                              match_price = books(idx)%orders(i)%price
+                              match_idx = i
+                          end if
+                      end if
+                  end do
+              end if
           else
-              match_price = -1.0d0
-              do i = 1, books(idx)%order_count
-                  temp_str = cchar_to_string(books(idx)%orders(i)%symbol)
-                  if (books(idx)%orders(i)%side == 'B' .and. trim(temp_str) == trim(o_str)) then
-                      if (books(idx)%orders(i)%price >= match_price) then
-                          match_price = books(idx)%orders(i)%price
-                          match_idx = i
+              if (o%side == 'B') then
+                  match_price = 1.0d15
+                  do i = 1, books(idx)%order_count
+                      temp_str = cchar_to_string(books(idx)%orders(i)%symbol)
+                      if (books(idx)%orders(i)%side == 'S' .and. trim(temp_str) == trim(o_str)) then
+                          if (books(idx)%orders(i)%price <= match_price) then
+                              match_price = books(idx)%orders(i)%price
+                              match_idx = i
+                          end if
                       end if
-                  end if
-              end do
-              if (match_price < o%price) match_idx = -1
+                  end do
+                  if (match_price > o%price) match_idx = -1
+              else
+                  match_price = -1.0d0
+                  do i = 1, books(idx)%order_count
+                      temp_str = cchar_to_string(books(idx)%orders(i)%symbol)
+                      if (books(idx)%orders(i)%side == 'B' .and. trim(temp_str) == trim(o_str)) then
+                          if (books(idx)%orders(i)%price >= match_price) then
+                              match_price = books(idx)%orders(i)%price
+                              match_idx = i
+                          end if
+                      end if
+                  end do
+                  if (match_price < o%price) match_idx = -1
+              end if
           end if
 
           if (match_idx == -1) exit
@@ -175,7 +188,6 @@ contains
           call record_trade(idx, o%side, match_price, fill_qty)
           o%quantity = o%quantity - fill_qty
           books(idx)%orders(match_idx)%quantity = books(idx)%orders(match_idx)%quantity - fill_qty
-
           if (books(idx)%orders(match_idx)%quantity <= 0) then
               books(idx)%orders(match_idx) = books(idx)%orders(books(idx)%order_count)
               books(idx)%order_count = books(idx)%order_count - 1
@@ -190,12 +202,11 @@ contains
       end if
   end subroutine match_order
 
-  subroutine add_order(id, symbol, price, quantity, side) bind(C, name="add_order")
-      integer(c_int), value :: id, quantity
+  subroutine add_order(id, symbol, price, quantity, side, order_type) bind(C, name="add_order")
+      integer(c_int), value :: id, quantity, order_type
       character(kind=c_char), intent(in) :: symbol(*)
       real(c_double), value :: price
       character(kind=c_char), value :: side
-
       integer(c_int) :: idx
       type(order) :: o
       character(len=8) :: sym_fortran
@@ -208,7 +219,7 @@ contains
 
       idx = find_instrument_index(symbol)
       if (idx == -1) then
-         print *, "Instrument limit reached or error for symbol [", sym_fortran, "]"
+         print *, "Instrument limit reached or error for symbol [", trim(sym_fortran), "]"
          return
       end if
 
@@ -218,6 +229,7 @@ contains
       o%quantity = quantity
       o%side = side
       o%timestamp = 0
+      o%order_type = order_type
       call match_order(idx, o)
   end subroutine add_order
 
@@ -255,6 +267,7 @@ contains
       integer :: idx, i
       character(len=8) :: sym_fortran
       character(kind=c_char) :: side
+      integer(c_int) :: order_type
 
       sym_fortran = ""
       do i = 1, 8
@@ -268,6 +281,7 @@ contains
       do i = 1, books(idx)%order_count
           if (books(idx)%orders(i)%id == id) then
               side = books(idx)%orders(i)%side
+              order_type = books(idx)%orders(i)%order_type
               books(idx)%orders(i) = books(idx)%orders(books(idx)%order_count)
               books(idx)%order_count = books(idx)%order_count - 1
               status = 0
@@ -276,7 +290,7 @@ contains
       end do
 
       if (status == 0) then
-         call add_order(id, symbol, new_price, new_quantity, side)
+         call add_order(id, symbol, new_price, new_quantity, side, order_type)
       end if
   end subroutine modify_order
 
@@ -340,4 +354,17 @@ contains
       end do
   end subroutine get_trades
 
+  subroutine get_risk_metrics(symbol, total_qty) bind(C, name="get_risk_metrics")
+      character(kind=c_char), intent(in) :: symbol(*)
+      integer(c_int), intent(out) :: total_qty
+      integer :: idx, i
+      total_qty = 0
+      idx = find_instrument_index(symbol)
+      if (idx == -1) return
+      do i = 1, books(idx)%order_count
+          total_qty = total_qty + books(idx)%orders(i)%quantity
+      end do
+  end subroutine get_risk_metrics
+
 end module advanced_order_book
+

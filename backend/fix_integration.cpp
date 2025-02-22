@@ -33,7 +33,6 @@ public:
         crack(message, sessionID);
     }
 
-    // Process NewOrderSingle FIX messages.
     void onMessage(const FIX44::NewOrderSingle& message, const FIX::SessionID& sessionID) override {
         FIX::ClOrdID clOrdID;
         FIX::Symbol symbol;
@@ -45,15 +44,10 @@ public:
         message.get(side);
         message.get(price);
         message.get(qty);
-
-        // Convert FIX side to our order side: 'B' for Buy, 'S' for Sell.
         char sideChar = (side == FIX::Side_BUY) ? 'B' : 'S';
-        // Convert ClOrdID (string) to int for order id.
         int id = std::atoi(clOrdID.getValue().c_str());
-        // Use the extracted symbol.
         std::string symStr = symbol.getValue();
-        // Call our C++ wrapper with all five arguments.
-        cpp_add_order(id, symStr, price, qty, sideChar);
+        cpp_add_order(id, symStr, price, qty, sideChar, 0);
         std::cout << "Processed FIX NewOrderSingle for symbol " << symStr << ": order id " << id << std::endl;
     }
 };

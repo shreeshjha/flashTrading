@@ -19,13 +19,13 @@ void marketMakerTask(const std::string &symbol) {
         int buyId = rand() % 10000 + 1000;
         double bidPrice = 100.0 + ((rand() % 100) / 10.0);
         int buyQty = (rand() % 50) + 1;
-        cpp_add_order(buyId, symbol, bidPrice, buyQty, 'B');
-
+        cpp_add_order(buyId, symbol, bidPrice, buyQty, 'B', 0);
+        
         int sellId = rand() % 10000 + 20000;
         double askPrice = 100.0 + ((rand() % 100) / 10.0);
         int sellQty = (rand() % 50) + 1;
-        cpp_add_order(sellId, symbol, askPrice, sellQty, 'S');
-
+        cpp_add_order(sellId, symbol, askPrice, sellQty, 'S', 0);
+        
         log_message("MarketMaker posted orders for " + symbol);
         std::this_thread::sleep_for(std::chrono::seconds(3));
     }
@@ -54,6 +54,7 @@ int main() {
 
     crow::App<CORSMiddleware> app;
 
+    // GET /order_count
     CROW_ROUTE(app, "/order_count")
     .methods(crow::HTTPMethod::Get, crow::HTTPMethod::Options)
     ([](const crow::request& req){
@@ -67,82 +68,66 @@ int main() {
         result["order_count"] = count;
         return crow::response(result);
     });
-    
+
+    // POST /add_order
     CROW_ROUTE(app, "/add_order")
-.methods(crow::HTTPMethod::Post, crow::HTTPMethod::Options)
-([](const crow::request& req) {
-    if(req.method == crow::HTTPMethod::Options)
-        return crow::response(204);
-
-    try {
-        // Log incoming request
-        std::cout << "Received order request: " << req.body << std::endl;
-        
-        // Ensure content type is correct
-        auto contentType = req.get_header_value("Content-Type");
-        if (contentType.find("application/json") == std::string::npos) {
+    .methods(crow::HTTPMethod::Post, crow::HTTPMethod::Options)
+    ([](const crow::request& req) {
+        if(req.method == crow::HTTPMethod::Options)
+            return crow::response(204);
+        try {
+            std::cout << "Received order request: " << req.body << std::endl;
+            auto contentType = req.get_header_value("Content-Type");
+            if (contentType.find("application/json") == std::string::npos) {
+                crow::json::wvalue error;
+                error["status"] = "error";
+                error["message"] = "Content-Type must be application/json";
+                return crow::response(400, error);
+            }
+            auto order = crow::json::load(req.body);
+            if (!order) {
+                crow::json::wvalue error;
+                error["status"] = "error";
+                error["message"] = "Invalid JSON format";
+                return crow::response(400, error);
+            }
+            if (!order.has("symbol") || !order.has("id") || 
+                !order.has("price") || !order.has("quantity") || 
+                !order.has("side") || !order.has("order_type")) {
+                crow::json::wvalue error;
+                error["status"] = "error";
+                error["message"] = "Missing required fields";
+                return crow::response(400, error);
+            }
+            std::string symbol = order["symbol"].s();
+            int id = order["id"].i();
+            double price = order["price"].d();
+            int quantity = order["quantity"].i();
+            std::string side_str = order["side"].s();
+            int order_type = order["order_type"].i();
+            if (symbol.empty() || price <= 0 || quantity <= 0 ||
+                (side_str != "B" && side_str != "S")) {
+                crow::json::wvalue error;
+                error["status"] = "error";
+                error["message"] = "Invalid field values";
+                return crow::response(400, error);
+            }
+            char side = side_str[0];
+            cpp_add_order(id, symbol, price, quantity, side, order_type);
+            crow::json::wvalue response;
+            response["status"] = "success";
+            response["order_id"] = id;
+            return crow::response(response);
+        } catch (const std::exception& e) {
+            std::cerr << "Exception in add_order: " << e.what() << std::endl;
             crow::json::wvalue error;
             error["status"] = "error";
-            error["message"] = "Content-Type must be application/json";
-            return crow::response(400, error);
+            error["message"] = std::string("Server error: ") + e.what();
+            return crow::response(500, error);
         }
+    });
 
-        // Parse JSON body
-        auto order = crow::json::load(req.body);
-        if (!order) {
-            crow::json::wvalue error;
-            error["status"] = "error";
-            error["message"] = "Invalid JSON format";
-            return crow::response(400, error);
-        }
-
-        // Validate required fields
-        if (!order.has("symbol") || !order.has("id") || 
-            !order.has("price") || !order.has("quantity") || 
-            !order.has("side")) {
-            crow::json::wvalue error;
-            error["status"] = "error";
-            error["message"] = "Missing required fields";
-            return crow::response(400, error);
-        }
-
-        // Extract values
-        std::string symbol = order["symbol"].s();
-        int id = order["id"].i();
-        double price = order["price"].d();
-        int quantity = order["quantity"].i();
-        std::string side_str = order["side"].s();
-
-        // Validate values
-        if (symbol.empty() || price <= 0 || quantity <= 0 || 
-            (side_str != "B" && side_str != "S")) {
-            crow::json::wvalue error;
-            error["status"] = "error";
-            error["message"] = "Invalid field values";
-            return crow::response(400, error);
-        }
-
-        char side = side_str[0];
-
-        // Add the order
-        cpp_add_order(id, symbol, price, quantity, side);
-
-        // Return success response
-        crow::json::wvalue response;
-        response["status"] = "success";
-        response["order_id"] = id;
-        return crow::response(response);
-
-    } catch (const std::exception& e) {
-        std::cerr << "Exception in add_order: " << e.what() << std::endl;
-        crow::json::wvalue error;
-        error["status"] = "error";
-        error["message"] = std::string("Server error: ") + e.what();
-        return crow::response(500, error);
-    }
-});
-    
-
+    // POST /cancel_order
     CROW_ROUTE(app, "/cancel_order")
     .methods(crow::HTTPMethod::Post, crow::HTTPMethod::Options)
     ([](const crow::request& req){
@@ -163,6 +148,7 @@ int main() {
         }
     });
 
+    // POST /modify_order
     CROW_ROUTE(app, "/modify_order")
     .methods(crow::HTTPMethod::Post, crow::HTTPMethod::Options)
     ([](const crow::request& req){
@@ -185,6 +171,7 @@ int main() {
         }
     });
 
+    // GET /order_book
     CROW_ROUTE(app, "/order_book")
     .methods(crow::HTTPMethod::Get, crow::HTTPMethod::Options)
     ([](const crow::request& req){
@@ -207,6 +194,7 @@ int main() {
         return crow::response(result);
     });
 
+    // GET /trades
     CROW_ROUTE(app, "/trades")
     .methods(crow::HTTPMethod::Get, crow::HTTPMethod::Options)
     ([](const crow::request& req){
@@ -230,6 +218,22 @@ int main() {
         return crow::response(result);
     });
 
+    // GET /risk_metrics
+    CROW_ROUTE(app, "/risk_metrics")
+    .methods(crow::HTTPMethod::Get, crow::HTTPMethod::Options)
+    ([](const crow::request& req){
+        if(req.method == crow::HTTPMethod::Options)
+            return crow::response(204);
+        auto sym = req.url_params.get("symbol");
+        if(!sym)
+            return crow::response(400, "Missing symbol param");
+        int total_qty = cpp_get_risk_metrics(sym);
+        crow::json::wvalue result;
+        result["total_quantity"] = total_qty;
+        return crow::response(result);
+    });
+
+    // WebSocket endpoint for live updates
     CROW_ROUTE(app, "/ws")
     .websocket()
     .onopen([](crow::websocket::connection& conn){
@@ -250,9 +254,10 @@ int main() {
          }).detach();
     })
     .onclose([](crow::websocket::connection& conn, const std::string& reason){
-         // Handle closure if needed.
+         // Handle WebSocket closure if needed.
     });
 
     app.port(18080).multithreaded().run();
     return 0;
 }
+

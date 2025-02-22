@@ -2,22 +2,22 @@
 #include <cstring>
 #include <algorithm>
 #include <mutex>
+#include <vector>
+#include <tuple>
 
-// Global mutex to protect Fortran calls.
 static std::mutex fortranMutex;
 
-// Helper: Convert std::string to an 8-character C string (padded with spaces)
 static void string_to_c8(const std::string &s, char sym[9]) {
     std::memset(sym, ' ', 8);
     sym[8] = '\0';
     std::strncpy(sym, s.c_str(), std::min((size_t)8, s.size()));
 }
 
-void cpp_add_order(int id, const std::string &symbol, double price, int quantity, char side) {
+void cpp_add_order(int id, const std::string &symbol, double price, int quantity, char side, int order_type) {
     std::lock_guard<std::mutex> lock(fortranMutex);
     char sym[9];
     string_to_c8(symbol, sym);
-    add_order(id, sym, price, quantity, side);
+    add_order(id, sym, price, quantity, side, order_type);
 }
 
 int cpp_cancel_order(const std::string &symbol, int id) {
@@ -49,9 +49,9 @@ int cpp_get_order_count(const std::string &symbol) {
 
 std::vector<std::tuple<double,int,char>> cpp_get_order_book_snapshot(const std::string &symbol) {
     std::lock_guard<std::mutex> lock(fortranMutex);
-    double prices[100];
-    int qtys[100];
-    char sides[100];
+    double prices[200];
+    int qtys[200];
+    char sides[200];
     int count = 0;
     char sym[9];
     string_to_c8(symbol, sym);
@@ -65,9 +65,9 @@ std::vector<std::tuple<double,int,char>> cpp_get_order_book_snapshot(const std::
 
 std::vector<TradeData> cpp_get_trades(const std::string &symbol) {
     std::lock_guard<std::mutex> lock(fortranMutex);
-    double prices[1000];
-    int qtys[1000], tids[1000];
-    char sides[1000];
+    double prices[2000];
+    int qtys[2000], tids[2000];
+    char sides[2000];
     int count = 0;
     char sym[9];
     string_to_c8(symbol, sym);
@@ -83,3 +83,13 @@ std::vector<TradeData> cpp_get_trades(const std::string &symbol) {
     }
     return result;
 }
+
+int cpp_get_risk_metrics(const std::string &symbol) {
+    std::lock_guard<std::mutex> lock(fortranMutex);
+    int total_qty = 0;
+    char sym[9];
+    string_to_c8(symbol, sym);
+    get_risk_metrics(sym, &total_qty);
+    return total_qty;
+}
+

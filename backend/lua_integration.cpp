@@ -15,7 +15,11 @@ int lua_add_order(lua_State* L) {
     int quantity = lua_tointeger(L, 4);
     const char* side_str = lua_tostring(L, 5);
     char side = side_str[0];
-    cpp_add_order(id, std::string(symbol), price, quantity, side);
+    int order_type = 0;
+    if (lua_gettop(L) >= 6) {
+        order_type = lua_tointeger(L, 6);
+    }
+    cpp_add_order(id, std::string(symbol), price, quantity, side, order_type);
     return 0;
 }
 
@@ -33,3 +37,4 @@ int main(int argc, char** argv) {
     lua_close(L);
     return 0;
 }
+
