@@ -16,6 +16,11 @@ function App() {
   const [cancelOrder, setCancelOrder] = useState({ id: "" });
   const [modifyOrder, setModifyOrder] = useState({ id: "", new_price: "", new_quantity: "" });
 
+  // Benchmark state
+  const [benchmarkResult, setBenchmarkResult] = useState(null);
+  const [benchmarkAdvancedResult, setBenchmarkAdvancedResult] = useState(null);
+  const [isBenchmarking, setIsBenchmarking] = useState(false);
+
   // Fetch functions
   const fetchOrderCount = async (sym) => {
     try {
@@ -75,7 +80,7 @@ function App() {
     return () => clearInterval(interval);
   }, [symbol]);
 
-  // WebSocket
+  // WebSocket for live updates
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:18080/ws");
     ws.onopen = () => {
@@ -94,7 +99,7 @@ function App() {
     return () => ws.close();
   }, [symbol]);
 
-  // Handlers
+  // Order Handlers
   const handleAddOrder = async () => {
     const payload = {
       symbol,
@@ -149,7 +154,32 @@ function App() {
     }
   };
 
-  // Chart data
+  // Benchmark Handlers
+  const handleBenchmark = async () => {
+    setIsBenchmarking(true);
+    try {
+      const res = await fetch(`http://localhost:18080/benchmark?n=1000&symbol=${symbol}`);
+      const data = await res.json();
+      setBenchmarkResult(data);
+    } catch (err) {
+      console.error("Error running benchmark:", err);
+    }
+    setIsBenchmarking(false);
+  };
+
+  const handleBenchmarkAdvanced = async () => {
+    setIsBenchmarking(true);
+    try {
+      const res = await fetch(`http://localhost:18080/benchmark_advanced?n=1000&c=4&symbol=${symbol}`);
+      const data = await res.json();
+      setBenchmarkAdvancedResult(data);
+    } catch (err) {
+      console.error("Error running advanced benchmark:", err);
+    }
+    setIsBenchmarking(false);
+  };
+
+  // Chart data for Order Book
   const orderBookData = {
     labels: orderBook.map((_, idx) => idx + 1),
     datasets: [
@@ -174,7 +204,6 @@ function App() {
 
       {/* Main container */}
       <div className="container">
-
         {/* Symbol Selection & Stats */}
         <div className="row mb-4">
           <div className="col-md-4">
@@ -330,6 +359,68 @@ function App() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Benchmark Section */}
+        <div className="row mb-5">
+          <div className="col-md-6">
+            <button
+              className="btn btn-primary w-100 mb-2"
+              onClick={handleBenchmark}
+              disabled={isBenchmarking}
+            >
+              {isBenchmarking ? "Running Single-Thread Benchmark..." : "Run Single-Thread Benchmark"}
+            </button>
+          </div>
+          <div className="col-md-6">
+            <button
+              className="btn btn-success w-100 mb-2"
+              onClick={handleBenchmarkAdvanced}
+              disabled={isBenchmarking}
+            >
+              {isBenchmarking ? "Running Multi-Thread Benchmark..." : "Run Multi-Thread Benchmark"}
+            </button>
+          </div>
+          {benchmarkResult && (
+            <div className="col-md-12">
+              <div className="card mt-3">
+                <div className="card-header bg-primary text-white">
+                  Single-Threaded Benchmark Result
+                </div>
+                <div className="card-body">
+                  <p><strong>Symbol:</strong> {benchmarkResult.symbol}</p>
+                  <p><strong>Orders Placed:</strong> {benchmarkResult.orders_placed}</p>
+                  <p><strong>Total Time:</strong> {benchmarkResult.time_ms} ms</p>
+                  <p>
+                    <strong>Throughput:</strong>{" "}
+                    {((benchmarkResult.orders_placed / benchmarkResult.time_ms) * 1000).toFixed(2)} orders/sec
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          {benchmarkAdvancedResult && (
+            <div className="col-md-12">
+              <div className="card mt-3">
+                <div className="card-header bg-success text-white">
+                  Multi-Threaded Benchmark Result
+                </div>
+                <div className="card-body">
+                  <p><strong>Symbol:</strong> {benchmarkAdvancedResult.symbol}</p>
+                  <p><strong>Threads:</strong> {benchmarkAdvancedResult.threads}</p>
+                  <p><strong>Orders Per Thread:</strong> {benchmarkAdvancedResult.orders_per_thread}</p>
+                  <p><strong>Total Orders:</strong> {benchmarkAdvancedResult.total_orders}</p>
+                  <p><strong>Total Time:</strong> {benchmarkAdvancedResult.time_ms} ms</p>
+                  <p>
+                    <strong>Throughput:</strong> {benchmarkAdvancedResult.orders_per_sec.toFixed(2)} orders/sec
+                  </p>
+                  <p>
+                    <strong>Avg Time Per Order:</strong> {benchmarkAdvancedResult.avg_time_per_order_ms.toFixed(3)} ms
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Order Book & Chart */}

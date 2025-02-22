@@ -83,9 +83,11 @@ int main() {
     const std::vector<std::string> symbols = {"AAPL", "MSFT"};
     
     std::cout << "Starting to send orders..." << std::endl;
-    
-    while(true) {
+    int maxOrders = 50;
+    int countOrders = 0;
+    while(countOrders < maxOrders) {
         try {
+            countOrders++;
             int orderId = rand() % 100000 + 50000;
             double price = 100.0 + (rand() % 50);
             int quantity = (rand() % 10) + 1;
